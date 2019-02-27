@@ -422,4 +422,11 @@
             <argument name="contextAdmin" xsi:type="object">Webjump\BraspagPagador\Gateway\Transaction\Base\Config\ContextAdmin</argument>
         </arguments>
     </type>
+    <type name="Magento\Framework\Console\CommandList">
+        <arguments>
+            <argument name="commands" xsi:type="array">
+                <item name="AuthAndCaptureOrder" xsi:type="object">Webjump\BraspagPagador\Console\Command\AuthAndCaptureOrder</item>
+            </argument>
+        </arguments>
+    </type>
 </config>

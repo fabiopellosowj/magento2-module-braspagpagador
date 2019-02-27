@@ -185,6 +185,12 @@ class CardTokenRepository implements CardTokenRepositoryInterface
         return $searchResult;
     }
 
+    public function getTokenByCustomerId($customerId)
+    {
+        $cardTokenCollection = $this->getCardTokenFactory()->create()->getCollection()->addFieldToFilter('customer_id', array('eq'=>$customerId));
+        return $cardTokenCollection->getData() ? $cardTokenCollection->getFirstItem() : null;
+    }
+
     /**
      * @param FilterGroup $filterGroup
      * @param Collection  $collection
