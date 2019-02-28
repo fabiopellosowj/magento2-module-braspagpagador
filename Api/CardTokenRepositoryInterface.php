@@ -34,6 +34,15 @@ interface CardTokenRepositoryInterface
 	 */
 	public function getList(SearchCriteriaInterface $searchCriteria);
 
+    /**
+     * get card token by customerID
+     *
+     * @param $customerId
+     *
+     * @return string|null
+     */
+	public function getTokenByCustomerId($customerId);
+
 	/**
 	 * Card Token Save
 	 *

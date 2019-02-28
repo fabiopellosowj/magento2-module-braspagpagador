@@ -429,4 +429,9 @@
             </argument>
         </arguments>
     </type>
+    <type name="Webjump\BraspagPagador\Console\Command\AuthAndCaptureOrder">
+        <arguments>
+            <argument name="request" xsi:type="object">\Webjump\Braspag\Pagador\Transaction\Resource\CreditCard\Send\Request</argument>
+        </arguments>
+    </type>
 </config>

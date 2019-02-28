@@ -7,13 +7,14 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Magento\Sales\Model\OrderFactory;
+use Webjump\Braspag\Pagador\Transaction\Resource\CreditCard\Send\Request;
 use Webjump\BraspagPagador\Gateway\Transaction\CreditCard\Config\ConfigInterface;
 use Webjump\BraspagPagador\Gateway\Transaction\Base\Config\InstallmentsConfigInterface;
 use Webjump\BraspagPagador\Helper\Validator;
-use Magento\Directory\Model\RegionFactory;
-use Webjump\Braspag\Pagador\Transaction\Api\CreditCard\Send\RequestInterface;
 use Webjump\SubscriptionBraspag\Model\RequestFactory;
 use Webjump\BraspagPagador\Model\CardTokenRepository;
+use Webjump\Braspag\Factories\SalesCommandFactory;
+use Webjump\Braspag\Factories\ClientHttpFactory;
 
 
 class AuthAndCaptureOrder extends Command
@@ -50,14 +51,21 @@ class AuthAndCaptureOrder extends Command
     protected $installmentsConfig;
 
     /**
-     * @var RegionFactory
-     **/
-    protected $regionFactory;
-
-    /**
      * @var CardTokenRepository
      **/
     protected $cardTokenRepository;
+
+    /**
+     * @var SalesCommandFactory
+     **/
+    protected $braspagSalesCommand;
+
+    /**
+     * @var \Magento\Sales\Model\Order
+     */
+    protected $order;
+
+    protected $handler;
 
     public function __construct(
         RequestFactory $requestFactory,
@@ -65,8 +73,8 @@ class AuthAndCaptureOrder extends Command
         ConfigInterface $config,
         Validator $validator,
         InstallmentsConfigInterface $installmentsConfig,
-        RegionFactory $regionFactory,
-        CardTokenRepository $cardTokenRepository
+        CardTokenRepository $cardTokenRepository,
+        SalesCommandFactory $braspagSalesCommand
     )
     {
         $this->setRequestFactory($requestFactory);
@@ -74,8 +82,8 @@ class AuthAndCaptureOrder extends Command
         $this->setConfig($config);
         $this->setValidator($validator);
         $this->setInstallmentsConfig($installmentsConfig);
-        $this->setRegionFactory($regionFactory);
         $this->setCardTokenRepository($cardTokenRepository);
+        $this->setBraspagSalesCommand($braspagSalesCommand);
         parent::__construct();
     }
 
@@ -97,108 +105,153 @@ class AuthAndCaptureOrder extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
+
+        $orders = [
+//            1000010317,
+            1000009930,
+            1000009861,
+            1000009858,
+            1000009855,
+            1000009840,
+            1000009837,
+            1000009831,
+            1000009825,
+            1000009819,
+            1000009816,
+            1000009795,
+            1000009780,
+            1000009696,
+            1000009684,
+            1000009678,
+            1000009675,
+            1000009663,
+            1000009624,
+            1000009609,
+            1000009576,
+            1000009570,
+            1000009567,
+            1000009555,
+            1000009549,
+            1000009531,
+            1000009474,
+            1000009465,
+            1000009453,
+            1000009420,
+            1000009408,
+            1000009399,
+            1000009348,
+            1000009315,
+            1000009282,
+            1000009255,
+            1000009195,
+            1000009189,
+            1000009039,
+            1000008955,
+            1000008688,
+            1000008655,
+            1000008391,
+            1000007017
+//            1000002242
+        ];
+
         $orderNumber = $input->getArgument(self::INPUT_KEY_INCREMENT_ID);
 
-        $output->writeln($orderNumber);
+        foreach ($orders as $orderNumber) {
 
-        $orderInfo = $this->orderFactory->create()->loadByIncrementId($orderNumber);
+            $orderInfo = $this->getOrderFactory()->create()->loadByIncrementId($orderNumber);
 
-        if(!$orderInfo->getId()) {
-            $output->writeln('Order ' . $orderNumber . ' not exists');
+            if (!$orderInfo->getId()) {
+                $output->writeln('Order ' . $orderNumber . ' not exists');
+            }
+
+            $output->writeln('ORDER: ' . $orderNumber);
+            $output->writeln('CLIENTE: ' . $orderInfo->getCustomerName());
+            $output->writeln('REQUEST:');
+
+            $paramsRequest = $this->buildBraspagRequest($orderInfo);
+
+            $output->writeln($paramsRequest);
+            $output->writeln('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
+
         }
 
-        $output->writeln($orderInfo->getCustomerName());
-
-        $requestBraspag = $this->braspagRequest($orderInfo);
-
-        $output->writeln($requestBraspag->getPaymentCreditCardHolder());
 
 
-
-
-
-
-//        $generator = ServiceLocator::getPackGenerator();
-//        $mode = $input->getOption(self::INPUT_KEY_MODE);
-//        if ($mode !== self::MODE_MERGE && $mode !== self::MODE_REPLACE) {
-//            throw new \InvalidArgumentException("Possible values for 'mode' option are 'replace' and 'merge'");
-//        }
-//        $locale = $input->getArgument(self::INPUT_KEY_LOCALE);
-//        $generator->generate(
-//            $input->getArgument(self::INPUT_KEY_SOURCE),
-//            $locale,
-//            $input->getOption(self::INPUT_KEY_MODE),
-//            $input->getOption(self::INPUT_KEY_ALLOW_DUPLICATES)
-//        );
-//        $output->writeln("<info>Successfully saved $locale language package.</info>");
-//        return \Magento\Framework\Console\Cli::RETURN_SUCCESS;
     }
 
-
     /**
-     * @param $orderInfo \Magento\Sales\Model\Order
-     * @return \Webjump\SubscriptionBraspag\Model\Request
+     * @return array
+     * @throws \Magento\Framework\Exception\CouldNotSaveException
      */
-    private function braspagRequest($orderInfo)
+    private function buildBraspagRequest($orderInfo)
     {
 
         $request = $this->getRequestFactory()->create();
 
         $paymentData = $orderInfo->getPayment();
-        
-        $customerCardTokenRepository = $this->getCardTokenRepository()->getTokenByCustomerId($orderInfo->getCustomerId());
 
+        $customerCardToken = $this->getCardTokenRepository()->getTokenByCustomerId($orderInfo->getCustomerId());
 
-        
-        $request->setMerchantId($this->getConfig()->getMerchantId());
-        $request->setMerchantKey($this->getConfig()->getMerchantKey());
-        $request->setIsTestEnvironment((boolean) $this->getConfig()->getIsTestEnvironment());
-        $request->setMerchantOrderId('CHANGE-CREDITCARD');
+        if ($paymentData->getMethod() != 'braspag_pagador_creditcard') {
+            throw new \Magento\Framework\Exception\CouldNotSaveException(__('Order ' . $orderInfo->getIncrementId() . ' . Payment method invalid. Allow: Braspag Credit Card - ‌braspag_pagador_creditcard'));
+        }
 
-        $request->setCustomerName($orderInfo->getCustomerName());
-        $request->setCustomerIdentity($orderInfo->getCustomerTaxvat());
-        $request->setCustomerIdentityType($this->extractIdentityType($orderInfo));
-        $request->setCustomerEmail($orderInfo->getCustomerEmail());
-        $request->setCustomerAddressPhone($orderInfo->getBillingAddress()->getTelephone());
+        if (!$customerCardToken) {
+            throw new \Magento\Framework\Exception\CouldNotSaveException(__('Order ' . $orderInfo->getIncrementId() . ' . Customer card token not exists. This funcionallity is only for customer with credit card token saved.'));
+        }
 
-        $request->setCustomerAddressStreet($this->getAddressAttribute($orderInfo->getBillingAddress(), $this->getConfig()->getCustomerStreetAttribute()));
-        $request->setCustomerAddressNumber($this->getAddressAttribute($orderInfo->getBillingAddress(), $this->getConfig()->getCustomerNumberAttribute()));
-        $request->setCustomerAddressComplement($this->getAddressAttribute($orderInfo->getBillingAddress(), $this->getConfig()->getCustomerComplementAttribute()));
-        $request->setCustomerAddressZipCode(preg_replace('/[^0-9]/','', $orderInfo->getBillingAddress()->getPostcode()));
-        $request->setCustomerAddressDistrict($this->getValidator()->sanitizeDistrict($this->getAddressAttribute($orderInfo->getBillingAddress(), $this->getConfig()->getCustomerDistrictAttribute())));
-        $request->setCustomerAddressCity($orderInfo->getBillingAddress()->getCity());
-        $request->setCustomerAddressState($orderInfo->getBillingAddress()->getRegionCode());
-        $request->setCustomerAddressCountry('BRA');
+        $params = [
+            'merchantOrderId' => $orderInfo->getIncrementId(),
+            'customer' => [
+                'name' => $orderInfo->getCustomerName(),
+                'identity' => $orderInfo->getCustomerIdentity(),
+                'identityType' => $orderInfo->getCustomerIdentityType(),
+                'email' => $orderInfo->getCustomerEmail(),
+                'birthDate' => $orderInfo->getCustomerBirthDate(),
+                'phone' => $orderInfo->getCustomerAddressPhone(),
+                'address' => [
+                    'street' => $this->getAddressAttribute($orderInfo->getBillingAddress(), $this->getConfig()->getCustomerStreetAttribute()),
+                    'number' => $this->getAddressAttribute($orderInfo->getBillingAddress(), $this->getConfig()->getCustomerNumberAttribute()),
+                    'complement' => $this->getAddressAttribute($orderInfo->getBillingAddress(), $this->getConfig()->getCustomerComplementAttribute()),
+                    'zipCode' => preg_replace('/[^0-9]/', '', $orderInfo->getBillingAddress()->getPostcode()),
+                    'district' => $this->getValidator()->sanitizeDistrict($this->getAddressAttribute($orderInfo->getBillingAddress(), $this->getConfig()->getCustomerDistrictAttribute())),
+                    'city' => $orderInfo->getBillingAddress()->getCity(),
+                    'state' => $orderInfo->getBillingAddress()->getRegionCode(),
+                    'country' => 'BRA',
+                ],
+                'deliveryAddress' => [
+                    'street' => $this->getAddressAttribute($orderInfo->getShippingAddress(), $this->getConfig()->getCustomerStreetAttribute()),
+                    'number' => $this->getAddressAttribute($orderInfo->getShippingAddress(), $this->getConfig()->getCustomerNumberAttribute()),
+                    'complement' => $this->getAddressAttribute($orderInfo->getShippingAddress(), $this->getConfig()->getCustomerComplementAttribute()),
+                    'zipCode' => preg_replace('/[^0-9]/', '', $orderInfo->getShippingAddress()->getPostcode()),
+                    'district' => $this->getValidator()->sanitizeDistrict($this->getAddressAttribute($orderInfo->getShippingAddress(), $this->getConfig()->getCustomerDistrictAttribute())),
+                    'city' => $orderInfo->getShippingAddress()->getCity(),
+                    'state' => $orderInfo->getShippingAddress()->getRegionCode(),
+                    'country' => 'BRA',
+                ]
+            ],
+            'payment' => [
+                'type' => 'CreditCard',
+                'amount' => $this->getOrderAmount($orderInfo),
+                'currency' => 'BRL',
+                'country' => 'BRA',
+                'provider' => $this->extractProvider($paymentData),
+                'serviceTaxAmount' => 0,
+                'installments' => $this->getInstallmentsConfig()->getInstallmentsNumber(),
+                'interest' => $this->getInstallmentsConfig()->isInterestByIssuer() ? 'ByIssuer' : 'ByMerchant',
+                'capture' => 1,
+                'authenticate' => (bool)$this->getConfig()->isAuthenticate3DsVbv(),
+                'returnUrl' => $this->getConfig()->getReturnUrl(),
+                'softDescriptor' => __('Braspag authorize and capture old orders that was not paid.'),
+                'creditcard' => [
+                    'cardToken' => $customerCardToken,
+                    'brand' => $this->extractPaymentCreditCardBrand($paymentData),
+                ],
+                'extraDataCollection' => $orderInfo->getPaymentExtraDataCollection()
+            ]
+        ];
 
-        $request->setCustomerDeliveryAddressStreet($this->getAddressAttribute($orderInfo->getShippingAddress(), $this->getConfig()->getCustomerStreetAttribute()));
-        $request->setCustomerDeliveryAddressNumber($this->getAddressAttribute($orderInfo->getShippingAddress(), $this->getConfig()->getCustomerNumberAttribute()));
-        $request->setCustomerDeliveryAddressComplement($this->getAddressAttribute($orderInfo->getShippingAddress(), $this->getConfig()->getCustomerComplementAttribute()));
-        $request->setCustomerDeliveryAddressZipCode(preg_replace('/[^0-9]/','', $orderInfo->getShippingAddress()->getPostcode()));
-        $request->setCustomerDeliveryAddressDistrict($this->getValidator()->sanitizeDistrict($this->getAddressAttribute($orderInfo->getShippingAddress(), $this->getConfig()->getCustomerDistrictAttribute())));
-        $request->setCustomerDeliveryAddressCity($orderInfo->getShippingAddress()->getCity());
-        $request->setCustomerDeliveryAddressState($orderInfo->getShippingAddress()->getRegionCode());
-        $request->setCustomerDeliveryAddressCountry('BRA');
-
-        $request->setPaymentAmount(0);
-        $request->setPaymentCurrency('BRL');
-        $request->setPaymentCountry('BRA');
-        $request->setPaymentProvider($this->extractProvider($paymentData));
-        $request->setPaymentServiceTaxAmount(0);
-        $request->setPaymentInstallments(1);
-        $request->setPaymentInterest($this->getInstallmentsConfig()->isInterestByIssuer() ? 'ByIssuer' : 'ByMerchant');
-        $request->setPaymentCapture((bool) $this->getConfig()->isAuthorizeAndCapture());
-        $request->setPaymentAuthenticate((bool) $this->getConfig()->isAuthenticate3DsVbv());
-        $request->setReturnUrl($this->getConfig()->getReturnUrl());
-        $request->setPaymentSoftDescriptor($this->getConfig()->getSoftDescriptor());
-        $request->setPaymentCreditCardCardNumber($paymentData->getCcNumber());
-        $request->setPaymentCreditCardHolder($paymentData->getCcOwner());
-        $request->setPaymentCreditCardExpirationDate(str_pad($paymentData->getCcExpMonth(), 2, '0', STR_PAD_LEFT) . '/' . $paymentData->getCcExpYear());
-        $request->setPaymentCreditCardSecurityCode($paymentData->getCcCid());
-        $request->setPaymentCreditCardSaveCard(true);
-        $request->setPaymentCreditCardBrand($this->extractPaymentCreditCardBrand($paymentData));
-
-        return $request;
-        
+        return json_encode($params, JSON_PRETTY_PRINT);
 
     }
 
@@ -220,14 +273,14 @@ class AuthAndCaptureOrder extends Command
 
     private function extractIdentityType($subscription)
     {
-        $identity = (string) preg_replace('/[^0-9]/','', $subscription->getCustomerTaxvat());
+        $identity = (string)preg_replace('/[^0-9]/', '', $subscription->getCustomerTaxvat());
         return (strlen($identity) > 11) ? 'CNPJ' : 'CPF';
     }
 
     private function getAddressAttribute($address, $attribute)
     {
         if (preg_match('/^street_/', $attribute)) {
-            $line = (int) str_replace('street_', '', $attribute);
+            $line = (int)str_replace('street_', '', $attribute);
             return $address->getStreetLine($line);
         }
 
@@ -240,6 +293,7 @@ class AuthAndCaptureOrder extends Command
 
         return $provider;
     }
+
     /**
      * @@SuppressWarnings("unused")
      */
@@ -331,26 +385,6 @@ class AuthAndCaptureOrder extends Command
     }
 
     /**
-     * @return mixed
-     */
-    private function getRegionFactory()
-    {
-        return $this->regionFactory;
-    }
-
-    /**
-     * @param mixed $regionFactory
-     *
-     * @return self
-     */
-    private function setRegionFactory($regionFactory)
-    {
-        $this->regionFactory = $regionFactory;
-
-        return $this;
-    }
-
-    /**
      * @return CardTokenRepository
      */
     private function getCardTokenRepository()
@@ -364,6 +398,28 @@ class AuthAndCaptureOrder extends Command
     private function setCardTokenRepository($cardTokenRepository)
     {
         $this->cardTokenRepository = $cardTokenRepository;
+    }
+
+    /**
+     * @return SalesCommandFactory
+     */
+    private function getBraspagSalesCommand()
+    {
+        return $this->braspagSalesCommand;
+    }
+
+    /**
+     * @param SalesCommandFactory $braspagSalesCommand
+     */
+    private function setBraspagSalesCommand($braspagSalesCommand)
+    {
+        $this->braspagSalesCommand = $braspagSalesCommand;
+    }
+
+    private function getOrderAmount($orderInfo)
+    {
+        $grandTotal = $orderInfo->getGrandTotal() * 100;
+        return str_replace('.', '', $grandTotal);
     }
 
 
