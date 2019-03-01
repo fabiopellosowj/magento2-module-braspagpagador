@@ -67,6 +67,8 @@ class AuthAndCaptureOrder extends Command
 
     protected $handler;
 
+    protected $_curl;
+
     public function __construct(
         RequestFactory $requestFactory,
         OrderFactory $orderFactory,
@@ -74,7 +76,8 @@ class AuthAndCaptureOrder extends Command
         Validator $validator,
         InstallmentsConfigInterface $installmentsConfig,
         CardTokenRepository $cardTokenRepository,
-        SalesCommandFactory $braspagSalesCommand
+        SalesCommandFactory $braspagSalesCommand,
+        \Magento\Framework\HTTP\Client\Curl $curl
     )
     {
         $this->setRequestFactory($requestFactory);
@@ -84,6 +87,7 @@ class AuthAndCaptureOrder extends Command
         $this->setInstallmentsConfig($installmentsConfig);
         $this->setCardTokenRepository($cardTokenRepository);
         $this->setBraspagSalesCommand($braspagSalesCommand);
+        $this->_curl = $curl;
         parent::__construct();
     }
 
@@ -106,55 +110,55 @@ class AuthAndCaptureOrder extends Command
     protected function execute(InputInterface $input, OutputInterface $output)
     {
 
-        $orders = [
-//            1000010317,
-            1000009930,
-            1000009861,
-            1000009858,
-            1000009855,
-            1000009840,
-            1000009837,
-            1000009831,
-            1000009825,
-            1000009819,
-            1000009816,
-            1000009795,
-            1000009780,
-            1000009696,
-            1000009684,
-            1000009678,
-            1000009675,
-            1000009663,
-            1000009624,
-            1000009609,
-            1000009576,
-            1000009570,
-            1000009567,
-            1000009555,
-            1000009549,
-            1000009531,
-            1000009474,
-            1000009465,
-            1000009453,
-            1000009420,
-            1000009408,
-            1000009399,
-            1000009348,
-            1000009315,
-            1000009282,
-            1000009255,
-            1000009195,
-            1000009189,
-            1000009039,
-            1000008955,
-            1000008688,
-            1000008655,
-            1000008391,
-            1000007017
-//            1000002242
-        ];
+//        $orders = [
+////            1000010317,
+//            1000009930,
+//            1000009861,
+//            1000009858,
+//            1000009855,
+//            1000009840,
+//            1000009837,
+//            1000009831,
+//            1000009825,
+//            1000009819,
+//            1000009816,
+//            1000009795,
+//            1000009780,
+//            1000009696,
+//            1000009684,
+//            1000009678,
+//            1000009675,
+//            1000009663,
+//            1000009624,
+//            1000009609,
+//            1000009576,
+//            1000009570,
+//            1000009567,
+//            1000009555,
+//            1000009549,
+//            1000009531,
+//            1000009474,
+//            1000009465,
+//            1000009453,
+//            1000009420,
+//            1000009408,
+//            1000009399,
+//            1000009348,
+//            1000009315,
+//            1000009282,
+//            1000009255,
+//            1000009195,
+//            1000009189,
+//            1000009039,
+//            1000008955,
+//            1000008688,
+//            1000008655,
+//            1000008391,
+//            1000007017
+//        ];
 
-        $orderNumber = $input->getArgument(self::INPUT_KEY_INCREMENT_ID);
+
+        $orders[] = $input->getArgument(self::INPUT_KEY_INCREMENT_ID);
 
         foreach ($orders as $orderNumber) {
 
@@ -174,8 +178,6 @@ class AuthAndCaptureOrder extends Command
             $output->writeln('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
 
         }
-
-
 
     }
 
